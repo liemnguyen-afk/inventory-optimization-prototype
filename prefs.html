@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Setup Preferences · Inventory Optimization prototype</title>
+  <link rel="stylesheet" href="css/clarity-tokens.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <main class="classic">
+    <h1>Setup Preferences</h1>
+    <div class="subject"><a href="#" data-stub id="item-name"></a> at <a href="#" data-stub id="item-wh"></a></div>
+
+    <div class="lbl desc-label">Description</div>
+    <div id="item-desc"></div>
+
+    <h2>Inventory Settings</h2>
+    <div class="rows"><div class="lbl">Unit of Measure</div><div id="uom"></div></div>
+
+    <h2>Cycle Counting</h2>
+    <div class="rows"><div class="lbl">Select Cycle Count Type</div><div><select aria-label="Cycle count type"><option></option><option>ABC – Monthly</option><option>ABC – Quarterly</option></select></div></div>
+
+    <h2>Additional Settings</h2>
+    <div class="rows"><div class="lbl">Is Consigned?</div><div>No</div></div>
+
+    <h2>Replenishment</h2>
+    <div class="rows">
+      <div class="lbl">Reorder Qty</div><div class="inp"><input class="txt" id="reorder-top"> <span class="uom"></span></div>
+      <div class="lbl">Enable Replenishment</div><div><input type="checkbox" class="cbx" id="enabled"></div>
+    </div>
+
+    <div id="ai-banner"></div>
+
+    <div class="rows">
+      <div class="lbl top">Replenishment Type</div>
+      <div class="types" id="types"></div>
+      <div class="lbl">Warehouse</div><div id="storage"></div>
+    </div>
+    <div class="rows" id="type-fields"></div>
+  </main>
+
+  <div class="classic-bar">
+    <div class="actions">
+      <a href="#" id="cancel">Cancel</a>
+      <button class="btn btn-primary" id="save">Save</button>
+    </div>
+  </div>
+  <footer class="classic-foot">
+    <img src="assets/coupa-logo-blue.svg" alt="coupa">
+    <div>Total Spend Management - Make Margins Multiply &nbsp;•&nbsp; English (United States) &nbsp;•&nbsp; Accessibility &nbsp;•&nbsp; <a href="#" data-stub>Coupa Cares</a></div>
+  </footer>
+
+  <script src="js/app.js"></script>
+  <script>
+    initPage({ primary: 'Inventory', sub: 'On-Hand Balances' });
+
+    const item = Store.item(new URLSearchParams(location.search).get('id') || 1);
+    if (!item) location.replace('iwo.html');
+    const $ = id => document.getElementById(id);
+    const fromOhb = document.referrer.includes('ohb.html');
+    const backHref = fromOhb ? 'ohb.html' : 'iwo.html';
+
+    document.title = `Setup Preferences · ${item.name} at ${item.warehouse}`;
+    $('item-name').textContent = item.name;
+    $('item-wh').textContent = item.warehouse;
+    $('item-desc').textContent = item.description;
+    $('uom').textContent = item.uom;
+    $('storage').textContent = item.storage;
+    document.querySelectorAll('.uom').forEach(u => { u.textContent = item.uom; });
+    $('reorder-top').value = item.reorderQty;
+    $('enabled').checked = item.enabled;
+
+    // Working copy; `previous` is restored by "Revert to Previous".
+    const form = { type: item.type, min: item.min, max: item.max, supplier: '', requestor: '' };
+    let previous = null;
+    let aiFields = new Set();   // fields whose value came from the recommendation
+    const showReco = item.reco && !item.recoAppliedOn;
+
+    const TYPES = [
+      ['Reorder', 'Reorder', 'Specify how much to reorder when the minimum quantity is reached.'],
+      ['Min / Max', 'Min/Max', "Create replenishment quantity based on item's on hand balance, supply and demand."],
+      ['Managed by Supplier', 'Managed by Supplier', ''],
+    ];
+
+    function renderBanner() {
+      const el = $('ai-banner');
+      if (!showReco) { el.innerHTML = ''; return; }
+      el.innerHTML = previous
+        ? `<div class="ai-banner"><img src="assets/ai-sparkle.svg" alt="">
+             <div class="body">Optimized recommendations have been adjusted below. Proceed to save these settings.</div>
+             <button class="btn btn-outline" id="revert">Revert to Previous</button></div>`
+        : `<div class="ai-banner"><img src="assets/ai-sparkle.svg" alt="">
+             <div class="body">${item.reco.banner}
+               <div class="qty"><div><div class="k">Minumum Qty</div>${item.reco.min} (${item.uom})</div>
+               <div><div class="k">Maximum Qty</div>${item.reco.max} (${item.uom})</div></div></div>
+             <button class="btn btn-outline" id="adopt">Adopt</button></div>`;
+      el.querySelector('#adopt')?.addEventListener('click', adopt);
+      el.querySelector('#revert')?.addEventListener('click', revert);
+    }
+
+    function renderTypes() {
+      const recoType = previous && item.reco.type;
+      $('types').innerHTML = TYPES.map(([value, label, hint]) => `
+        <label><input type="radio" name="type" value="${value}" ${form.type === value ? 'checked' : ''}>
+          <span><b>${label}</b>${hint ? ` — ${hint}` : ''}</span>
+          ${recoType === value ? '<img src="assets/ai-sparkle.svg" alt="Recommended">' : ''}</label>`).join('');
+      $('types').querySelectorAll('input').forEach(r => r.addEventListener('change', () => { form.type = r.value; aiFields.delete('type'); renderFields(); }));
+    }
+
+    function qtyField(key, label, required) {
+      const ai = aiFields.has(key);
+      return `<div class="lbl">${required ? '<span class="req">*</span>' : ''}${label}</div>
+        <div class="inp"><input class="txt ${ai ? 'ai' : ''}" data-key="${key}" value="${form[key]}">
+          ${ai ? '<img class="ai-mark" src="assets/ai-sparkle.svg" alt="">' : ''}${esc(item.uom)}</div>`;
+    }
+    function textField(key, label, required) {
+      return `<div class="lbl">${required ? '<span class="req">*</span>' : ''}${label}</div>
+        <div><input class="txt wide" data-key="${key}" placeholder="Start typing" value="${esc(form[key])}"></div>`;
+    }
+
+    function renderFields() {
+      const managed = form.type === 'Managed by Supplier';
+      let html = qtyField('min', 'Minimum Qty', managed);
+      html += qtyField('max', form.type === 'Reorder' ? 'Reorder Qty' : 'Maximum Qty', managed);
+      html += textField('supplier', 'Supplier', managed);
+      if (form.type !== 'Min / Max') html += textField('requestor', managed ? 'Requester' : 'Requestor', managed);
+      $('type-fields').innerHTML = html;
+      $('type-fields').querySelectorAll('input').forEach(inp => inp.addEventListener('input', () => {
+        form[inp.dataset.key] = inp.value;
+        // A manual edit means the value is no longer the AI's suggestion.
+        if (aiFields.delete(inp.dataset.key)) {
+          inp.classList.remove('ai');
+          inp.parentElement.querySelector('.ai-mark')?.remove();
+        }
+      }));
+    }
+
+    function adopt() {
+      previous = { ...form };
+      Object.assign(form, { type: item.reco.type, min: item.reco.min, max: item.reco.max });
+      aiFields = new Set(['min', 'max']);
+      renderAll();
+    }
+    function revert() {
+      Object.assign(form, previous);
+      previous = null;
+      aiFields.clear();
+      renderAll();
+    }
+    function renderAll() { renderBanner(); renderTypes(); renderFields(); }
+
+    $('cancel').addEventListener('click', e => { e.preventDefault(); location.href = backHref; });
+    $('save').addEventListener('click', () => {
+      const min = Number(form.min), max = Number(form.max);
+      if (!min || !max) { toast('Enter both quantities before saving'); return; }
+      if (min > max) { toast('Minimum Qty can’t be greater than the maximum'); return; }
+      Store.update(s => {
+        const it = s.items.find(i => i.id === item.id);
+        Object.assign(it, {
+          type: form.type, min, max,
+          reorderQty: Number($('reorder-top').value) || it.reorderQty,
+          enabled: $('enabled').checked,
+          supplier: form.supplier.trim() || it.supplier,
+          requestor: form.requestor.trim() || it.requestor,
+        });
+        if (previous) it.recoAppliedOn = todayStr();
+      });
+      const msg = `Successfully saved Replenishment Type and respective amounts for ${item.name}.`;
+      if (fromOhb) go('ohb.html', msg);
+      else { sessionStorage.setItem('invopt-banner', msg); location.href = `iwo.html?highlight=${item.id}`; }
+    });
+
+    renderAll();
+  </script>
+</body>
+</html>

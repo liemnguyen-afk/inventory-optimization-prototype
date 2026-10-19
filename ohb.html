@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>On-Hand Balances · Inventory Optimization prototype</title>
+  <link rel="stylesheet" href="css/clarity-tokens.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <main class="page">
+    <div class="title-row">
+      <h1 class="page-title">On-Hand Balances</h1>
+      <button class="btn-classic" data-stub>Switch to Classic</button>
+    </div>
+    <nav class="page-tabs">
+      <a href="ohb.html" class="selected">On-Hand Balances</a>
+      <a href="#" data-stub>Item Supply and Demand Reports</a>
+      <a href="iwo.html">Item Warehouse Optimization</a>
+    </nav>
+
+    <section class="card">
+      <div class="views-row">
+        <button class="views-btn" data-stub><img src="assets/menu.svg" alt="">Views</button>
+        <span class="views-title">All</span>
+      </div>
+      <div class="toolbar">
+        <button class="btn btn-outline" id="cycle" disabled>Send to Cycle Count</button>
+        <span class="spacer"></span>
+        <label class="search" style="width:240px"><img src="assets/search.svg" alt=""><input id="q" placeholder="Search in this view"></label>
+        <button class="icon-btn sm" data-stub aria-label="Filter"><img src="assets/filter.svg" alt=""></button>
+        <button class="icon-btn kebab" data-stub aria-label="More"></button>
+      </div>
+      <div id="table"></div>
+    </section>
+  </main>
+
+  <script src="js/app.js"></script>
+  <script>
+    initPage({ primary: 'Inventory', sub: 'On-Hand Balances' });
+    aiFab();
+    document.querySelector('.kebab').innerHTML = ICON.kebab;
+
+    // Row action sets, matching the icon combinations in the design.
+    const ACTIONS = {
+      settings: ['ohb-settings.svg', 'Setup Preferences'],
+      clipboard: ['ohb-clipboard.svg', 'Adjust Inventory'],
+      cartEdit: ['ohb-cart-edit.svg', 'Edit Replenishment'],
+      cartGo: ['ohb-cart-go.svg', 'Create Requisition'],
+      consume: ['ohb-consume.svg', 'Consume Inventory'],
+      restore: ['ohb-restore.svg', 'Transaction History'],
+    };
+    const SETS = {
+      full: ['settings', 'clipboard', 'cartEdit', 'cartGo', 'consume', 'restore'],
+      standard: ['settings', 'clipboard', 'cartEdit', 'cartGo', 'restore'],
+      minimal: ['settings', 'clipboard', 'restore'],
+    };
+    const rowSet = ['full', 'standard', 'minimal', 'standard', 'standard', 'full', 'minimal'];
+
+    const selected = new Set();
+    const q = document.getElementById('q');
+    const money = n => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    function render() {
+      const { items } = Store.get();
+      const term = q.value.trim().toLowerCase();
+      const rows = items.filter(i => !term || [i.no, i.name, i.warehouse].join(' ').toLowerCase().includes(term));
+      document.getElementById('table').innerHTML = `
+        <div class="table-wrap"><table class="dt">
+          <thead><tr>
+            <th class="cb-col"><span class="cb ${rows.length && rows.every(r => selected.has(r.id)) ? 'on' : ''}" data-all>${ICON.check}</span></th>
+            <th>Item #</th><th>Name</th><th>Warehouse</th><th class="num">Qty</th><th class="num">Allocated</th><th class="num">Available</th>
+            <th><span class="ai-head">UOM ${ICON.info}</span></th><th class="num">Unit Price</th><th class="num">Open Requisition Quantity</th>
+            <th class="num">Stock Value</th><th>Currency</th><th>Aisle</th><th class="sticky">Actions</th>
+          </tr></thead>
+          <tbody>${rows.map(i => `<tr>
+            <td class="cb-col"><span class="cb ${selected.has(i.id) ? 'on' : ''}" data-select="${i.id}">${ICON.check}</span></td>
+            <td>${i.no}</td>
+            <td><a href="prefs.html?id=${i.id}">${esc(i.name)}</a></td>
+            <td><a href="#" data-stub>${esc(i.warehouse)}</a></td>
+            <td class="num">${i.qty.toLocaleString('en-US')}</td>
+            <td class="num"><a href="#" data-stub>${i.allocated}</a></td>
+            <td class="num"><a href="#" data-stub>${i.available}</a></td>
+            <td>${i.uom}</td>
+            <td class="num">${money(i.price)}</td>
+            <td class="num">${i.openReq}</td>
+            <td class="num">${i.stockValue.toLocaleString('en-US')}</td>
+            <td>${i.currency}</td>
+            <td>${i.aisle}</td>
+            <td class="sticky"><div class="ohb-actions">${SETS[rowSet[(i.id - 1) % rowSet.length]].map(k => {
+              const [icon, label] = ACTIONS[k];
+              return k === 'settings'
+                ? `<a href="prefs.html?id=${i.id}" title="${label}"><img src="assets/${icon}" alt="${label}"></a>`
+                : `<button data-stub title="${label}"><img src="assets/${icon}" alt="${label}"></button>`;
+            }).join('')}</div></td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+        ${pagerHtml()}`;
+      document.getElementById('cycle').disabled = !selected.size;
+    }
+
+    document.addEventListener('click', e => {
+      const one = e.target.closest('[data-select]');
+      const all = e.target.closest('[data-all]');
+      if (one) {
+        const id = Number(one.dataset.select);
+        selected.has(id) ? selected.delete(id) : selected.add(id);
+        render();
+      } else if (all) {
+        const ids = Store.get().items.map(i => i.id);
+        const allOn = ids.every(id => selected.has(id));
+        ids.forEach(id => allOn ? selected.delete(id) : selected.add(id));
+        render();
+      }
+    });
+    document.getElementById('cycle').addEventListener('click', () => {
+      toast(`${selected.size} item${selected.size > 1 ? 's' : ''} sent to cycle count`);
+      selected.clear();
+      render();
+    });
+    q.addEventListener('input', render);
+    render();
+  </script>
+</body>
+</html>

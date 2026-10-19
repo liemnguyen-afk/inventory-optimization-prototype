@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Optimization Settings · Inventory Optimization prototype</title>
+  <link rel="stylesheet" href="css/clarity-tokens.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <main class="os-page">
+    <h1 class="page-title">Optimization Settings</h1>
+    <div class="os-grid">
+      <div class="os-col">
+        <section class="os-card" id="card-abc"></section>
+        <section class="os-card" id="card-sla"></section>
+      </div>
+      <div class="os-col">
+        <section class="os-card" id="card-xyz"></section>
+      </div>
+    </div>
+  </main>
+  <footer class="classic-foot os-foot">
+    <img src="assets/coupa-logo-blue.svg" alt="coupa">
+    <div>Business Spend Management &nbsp;•&nbsp; English &nbsp;•&nbsp; Accessibility &nbsp;•&nbsp; Coupa Cares</div>
+  </footer>
+
+  <script src="js/app.js"></script>
+  <script>
+    initPage({ primary: 'Setup' });
+    aiFab();
+
+    const TYPES = ['Reorder', 'Min/Max', 'SMI'];
+    const DEFAULTS = {
+      abc: { high: 80, medium: 15, low: 5 },
+      xyz: { stable: 0.5, variable: 1 },
+      sla: {
+        A: [[98.5, 'Reorder'], [96.5, 'SMI'], [92, 'Min/Max']],
+        B: [[96, 'Min/Max'], [92, 'Reorder'], [86.5, 'Reorder']],
+        C: [[91, 'Min/Max'], [87.5, 'Min/Max'], [75, 'Reorder']],
+      },
+    };
+    const clone = o => JSON.parse(JSON.stringify(o));
+    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+    let saved = Store.get().settings || clone(DEFAULTS);
+    let editing = null;   // 'abc' | 'xyz' | 'sla'
+    let draft = null;
+    let raw = {};         // text as typed, so "0." or "97." survive re-renders
+
+    const isDirty = () => editing && !same(draft, saved[editing]);
+    const pencil = key => `<button class="icon-btn" data-edit="${key}" aria-label="Edit"><img src="assets/icon-edit.svg" alt=""></button>`;
+    const actions = key => `
+      <div class="os-actions">
+        <button class="btn btn-text" data-cancel>Cancel</button>
+        <button class="btn btn-outline" data-revert ${same(draft, DEFAULTS[key]) ? 'disabled' : ''}>Revert to Default</button>
+        <button class="btn btn-primary" data-save ${isDirty() ? '' : 'disabled'}>Save</button>
+      </div>`;
+    const head = (key, title) => `<div class="os-head"><h2>${title}</h2>${editing === key ? '' : pencil(key)}</div>`;
+    const field = (key, value) => esc(key in raw ? raw[key] : value);
+    const tip = text => `<span class="info-tip" title="${esc(text)}">${ICON.info}</span>`;
+
+    /* ---------- Item Warehouse Revenue Range (ABC) */
+    function abcErrors(v) { return v.high + v.medium + v.low === 100 ? null : 'Total of 3 segments must equal 100%'; }
+    function renderAbc() {
+      const on = editing === 'abc';
+      const v = on ? draft : saved.abc;
+      const err = on && abcErrors(v);
+      const changed = k => on && err && v[k] !== saved.abc[k];
+      const notes = {
+        high: `(top ${v.high}% revenue contribution)`,
+        medium: `( below top ${v.high}%, consider ${v.medium}% of the revenue)`,
+        low: `(below top ${v.high + v.medium}% , consider ${v.low}% of the revenue)`,
+      };
+      const cell = k => on
+        ? `<div class="cell-inline"><input class="os-num ${changed(k) ? 'invalid' : ''}" data-abc="${k}" value="${field(`abc:${k}`, v[k])}" inputmode="numeric"> %</div>`
+        : `<b>${v[k]}%</b> ${notes[k]}`;
+      const el = document.getElementById('card-abc');
+      el.classList.toggle('editing', on);
+      el.innerHTML = `${head('abc', 'Item Warehouse Revenue Range')}
+        <p class="os-desc">Configure operational scale thresholds based on the total monetary value of inventory processed in the Item Warehouses.</p>
+        ${err ? `<div class="os-error">${ICON.error} ${err}</div>` : ''}
+        <table class="os-table">
+          <thead><tr><th style="width:36%">Revenue Segment (ABC)</th><th>Valuation of Item warehouse Top to bottom order</th></tr></thead>
+          <tbody>${[['high', 'High'], ['medium', 'Medium'], ['low', 'Low']].map(([k, l]) => `<tr><td>${l}</td><td>${cell(k)}</td></tr>`).join('')}</tbody>
+        </table>
+        ${on ? actions('abc') : ''}`;
+    }
+
+    /* ---------- Demand Variance Range (XYZ) */
+    function xyzErrors(v) {
+      if (!(v.stable > 0)) return 'Stable range must be greater than 0';
+      if (!(v.variable > v.stable)) return 'Variable upper limit must be greater than the Stable limit';
+      return null;
+    }
+    function renderXyz() {
+      const on = editing === 'xyz';
+      const v = on ? draft : saved.xyz;
+      const err = on && xyzErrors(v);
+      const el = document.getElementById('card-xyz');
+      el.classList.toggle('editing', on);
+      const help = t => `<span class="muted">${t}</span>`;
+      const rows = on ? [
+        ['Stable', `<div class="cell-inline">Up to <input class="os-num" data-xyz="stable" value="${field('xyz:stable', v.stable)}" inputmode="decimal"> ${help('Low variation in monthly demand')}</div>`],
+        ['Variable', `<div class="cell-inline">${v.stable} &nbsp; to <input class="os-num" data-xyz="variable" value="${field('xyz:variable', v.variable)}" inputmode="decimal"> ${help('Moderate, seasonal variation')}</div>`],
+        ['Erratic', `<div class="cell-inline">&gt; &nbsp; ${v.variable}</div>`],
+      ] : [
+        ['Stable', `0 - ${v.stable}${tip('Coefficient of variation of monthly demand is at or below this value')}`],
+        ['Variable', `${v.stable}-${Number(v.variable).toFixed(1)}${tip('Demand varies moderately, often seasonally')}`],
+        ['Erratic', `&gt;${v.variable}${tip('Demand is highly unpredictable')}`],
+      ];
+      el.innerHTML = `${head('xyz', 'Demand Variance Range')}
+        <p class="os-desc">Configure demand variance ranges for item warehouses. Default values are provided but can be customized based on your business needs.<br>
+          <b>NOTE:</b> Variance range - Greater than "From Value" and less than or equal to "To Value"</p>
+        ${err ? `<div class="os-error">${ICON.error} ${err}</div>` : ''}
+        <table class="os-table">
+          <thead><tr><th style="width:50%">Demand Segment (XYZ)</th><th>Variance Range</th></tr></thead>
+          <tbody>${rows.map(([l, c]) => `<tr><td>${l}</td><td>${c}</td></tr>`).join('')}</tbody>
+        </table>
+        ${on ? actions('xyz') : ''}`;
+    }
+
+    /* ---------- SLA Targets & Replenishment Types */
+    function slaErrors(v) {
+      return Object.values(v).flat().some(([pct]) => !(pct > 0 && pct <= 100)) ? 'Service levels must be between 0 and 100%' : null;
+    }
+    function renderSla() {
+      const on = editing === 'sla';
+      const v = on ? draft : saved.sla;
+      const err = on && slaErrors(v);
+      const el = document.getElementById('card-sla');
+      el.classList.toggle('editing', on);
+      const cell = (row, col) => {
+        const [pct, type] = v[row][col];
+        if (!on) return `<b>${pct}%</b> (${type})`;
+        const bad = !(pct > 0 && pct <= 100);
+        return `<div class="cell-stack">
+          <div class="cell-inline"><input class="os-num w60 ${bad ? 'invalid' : ''}" data-sla="${row}.${col}" value="${field(`sla:${row}.${col}`, pct)}" inputmode="decimal"> %</div>
+          <div class="os-select"><select data-sla-type="${row}.${col}" aria-label="Replenishment type">${TYPES.map(t => `<option ${t === type ? 'selected' : ''}>${t}</option>`).join('')}</select>${ICON.caret}</div>
+        </div>`;
+      };
+      el.innerHTML = `${head('sla', 'SLA Targets &amp; Replenishment Types')}
+        <p class="os-desc">To prevent stockouts (running out of critical "AX" cash cows) and dead stock (over-ordering highly unpredictable "AZ" or "CZ" items that sit in a warehouse gathering dust)</p>
+        ${err ? `<div class="os-error">${ICON.error} ${err}</div>` : ''}
+        <table class="os-table">
+          <thead><tr><th style="white-space:nowrap">Value / Demand</th><th>X - Stable</th><th>Y - Variable</th><th>Z - Erratic</th></tr></thead>
+          <tbody>${[['A', 'A - High'], ['B', 'B - Medium'], ['C', 'C - Low']].map(([r, l]) =>
+            `<tr><td style="padding-right:0">${l}</td>${[0, 1, 2].map(c => `<td style="padding-left:var(--cui-space-md)">${cell(r, c)}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table>
+        ${on ? actions('sla') : ''}`;
+    }
+
+    const render = () => { renderAbc(); renderXyz(); renderSla(); };
+    const ERRORS = { abc: abcErrors, xyz: xyzErrors, sla: slaErrors };
+
+    /* Re-render without losing the caret in the field being typed into. */
+    function rerenderKeepingFocus() {
+      const a = document.activeElement;
+      const key = a && ['data-abc', 'data-xyz', 'data-sla'].find(k => a.hasAttribute(k));
+      const sel = key && `[${key}="${a.getAttribute(key)}"]`;
+      const pos = a && a.selectionStart;
+      render();
+      if (sel) { const n = document.querySelector(sel); n.focus(); n.setSelectionRange(pos, pos); }
+    }
+
+    document.addEventListener('input', e => {
+      const t = e.target;
+      const num = t.value.trim() === '' ? NaN : Number(t.value);
+      if (t.dataset.abc) { draft[t.dataset.abc] = num; raw[`abc:${t.dataset.abc}`] = t.value; }
+      else if (t.dataset.xyz) { draft[t.dataset.xyz] = num; raw[`xyz:${t.dataset.xyz}`] = t.value; }
+      else if (t.dataset.sla) { const [r, c] = t.dataset.sla.split('.'); draft[r][c][0] = num; raw[`sla:${t.dataset.sla}`] = t.value; }
+      else return;
+      rerenderKeepingFocus();
+    });
+    document.addEventListener('change', e => {
+      const t = e.target;
+      if (!t.dataset.slaType) return;
+      const [r, c] = t.dataset.slaType.split('.');
+      draft[r][c][1] = t.value;
+      render();
+    });
+
+    /* ---------- Edit / cancel / revert / save, guarded by the "edits in process" dialog */
+    function startEdit(key) { editing = key; draft = clone(saved[key]); raw = {}; render(); }
+    function stopEdit() { editing = null; draft = null; raw = {}; render(); }
+
+    function guard(proceed) {
+      if (!isDirty()) { proceed(); return; }
+      document.body.insertAdjacentHTML('beforeend', `
+        <div class="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
+          <div class="dialog">
+            <h3 id="dlg-title">You have edits in process</h3>
+            <p>Save changes to your edits before proceeding to next activity.</p>
+            <div class="row"><button class="btn btn-text" data-back>Back to Editing</button>
+              <button class="btn btn-primary" data-leave>Leave Without Saving</button></div>
+          </div>
+        </div>`);
+      const dlg = document.querySelector('.dialog-backdrop');
+      dlg.querySelector('[data-back]').focus();
+      dlg.querySelector('[data-back]').addEventListener('click', () => dlg.remove());
+      dlg.querySelector('[data-leave]').addEventListener('click', () => { dlg.remove(); proceed(); });
+    }
+
+    document.addEventListener('click', e => {
+      const edit = e.target.closest('[data-edit]');
+      if (edit) { guard(() => startEdit(edit.dataset.edit)); return; }
+      if (e.target.closest('[data-cancel]')) { stopEdit(); return; }
+      if (e.target.closest('[data-revert]')) { draft = clone(DEFAULTS[editing]); raw = {}; render(); return; }
+      if (e.target.closest('[data-save]')) {
+        const err = ERRORS[editing](draft);
+        if (err) { toast(err); return; }
+        saved = { ...saved, [editing]: clone(draft) };
+        Store.update(s => { s.settings = saved; });
+        stopEdit();
+        toast('Optimization settings saved');
+        return;
+      }
+      // Leaving the page mid-edit goes through the same dialog.
+      const link = e.target.closest('a[href]');
+      if (link && isDirty() && !link.hasAttribute('data-stub') && !link.getAttribute('href').startsWith('#')) {
+        e.preventDefault();
+        guard(() => { location.href = link.href; });
+      }
+    }, true);
+
+    render();
+  </script>
+</body>
+</html>

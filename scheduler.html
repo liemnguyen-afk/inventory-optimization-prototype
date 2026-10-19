@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Optimization Scheduler · Inventory Optimization prototype</title>
+  <link rel="stylesheet" href="css/clarity-tokens.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <main class="page">
+    <h1 class="page-title">Optimization Scheduler</h1>
+    <nav class="page-tabs">
+      <a href="scheduler.html" class="selected">Optimization Scheduler</a>
+      <a href="reports.html">Item Warehouse Optimization Reports</a>
+    </nav>
+
+    <section class="card">
+      <div class="views-row">
+        <button class="views-btn" data-stub><img src="assets/menu.svg" alt="">Views</button>
+        <span class="views-title">All</span>
+      </div>
+      <div class="toolbar">
+        <a class="btn btn-outline lg" href="job.html">Schedule Program</a>
+        <span class="spacer"></span>
+        <label class="search"><img src="assets/search.svg" alt=""><input id="q" placeholder="Search"></label>
+        <button class="icon-btn sm" data-stub aria-label="Filter"><img src="assets/filter.svg" alt=""></button>
+        <button class="icon-btn kebab" data-stub aria-label="More"></button>
+      </div>
+      <div id="table"></div>
+    </section>
+  </main>
+
+  <script src="js/app.js"></script>
+  <script>
+    initPage({ primary: 'Inventory', sub: 'Optimization Scheduler' });
+    aiFab();
+    document.querySelector('.kebab').innerHTML = ICON.kebab;
+
+    const highlight = new URLSearchParams(location.search).get('highlight');
+    const q = document.getElementById('q');
+
+    function render() {
+      const { jobs } = Store.get();
+      const term = q.value.trim().toLowerCase();
+      const rows = jobs.filter(j => !term || [j.name, j.description, j.owner, ...j.warehouses].join(' ').toLowerCase().includes(term));
+      const el = document.getElementById('table');
+
+      if (!jobs.length) {
+        el.innerHTML = `
+          <div class="table-wrap"><table class="dt"><thead><tr>
+            <th>Name</th><th>Description</th><th>Warehouse</th><th>Frequency</th><th>Repeats</th><th>Job Owner</th><th>Active</th><th class="sticky">Actions</th>
+          </tr></thead></table></div>
+          <div class="empty">
+            <img src="assets/empty-file.svg" alt="">
+            <div>No Program to view</div>
+            <a class="btn btn-primary lg pill" href="job.html">${ICON.plus} Schedule Program</a>
+          </div>
+          <div class="pager"><div class="per">Items per page: <button class="on">15</button><button>45</button><button>90</button></div></div>`;
+        return;
+      }
+
+      el.innerHTML = `
+        <div class="table-wrap"><table class="dt">
+          <thead><tr>
+            <th>Name</th><th>Description</th><th>Warehouse</th><th>Frequency</th><th>Repeats</th>
+            <th>Job Owner</th><th>Status</th><th>Last executed</th><th>Active</th><th class="sticky">Actions</th>
+          </tr></thead>
+          <tbody>${rows.map(j => {
+            const processing = j.status === 'Processing';
+            return `<tr class="${String(j.id) === highlight ? 'row-new' : ''}">
+              <td>${esc(j.name)}</td>
+              <td>${esc(j.description)}</td>
+              <td>${warehouseCell(j.warehouses)}</td>
+              <td>${j.every} ${j.every === 1 ? 'month' : 'months'}</td>
+              <td>${j.repeats ? 'Yes' : 'No'}</td>
+              <td>${esc(j.owner)}</td>
+              <td><span class="chip ${j.status.toLowerCase()}">${j.status}</span></td>
+              <td>${j.lastExecuted || '—'}</td>
+              <td>${j.active ? 'Yes' : 'No'}</td>
+              <td class="sticky"><div class="actions">
+                <a class="icon-btn ghost" href="job.html?id=${j.id}" ${processing ? 'disabled aria-disabled="true"' : ''} title="Edit"><img src="assets/icon-edit.svg" alt="Edit"></a>
+                ${j.showReport && !processing ? `<a class="icon-btn ghost" href="report.html?id=${latestReportId(j.id)}" title="View latest report"><img src="assets/icon-clipboard.svg" alt="View report"></a>` : ''}
+                ${!j.repeats && !processing ? `<button class="icon-btn ghost" data-run="${j.id}" title="Run optimization now"><img src="assets/icon-send.svg" alt="Run"></button>` : ''}
+              </div></td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table></div>
+        ${pagerHtml()}`;
+    }
+
+    function latestReportId(jobId) {
+      const r = Store.get().reports.find(x => x.jobId === jobId);
+      return r ? r.id : '';
+    }
+
+    document.addEventListener('click', e => {
+      const run = e.target.closest('[data-run]');
+      if (!run) return;
+      startRun(run.dataset.run);
+      toast(`Optimization started for “${Store.job(run.dataset.run).name}”`);
+      render();
+    });
+    q.addEventListener('input', render);
+
+    // Poll so "Processing" jobs flip to "Completed" while the user watches.
+    setInterval(() => {
+      if (settleRuns()) {
+        toast('Optimization complete — report is ready');
+        render();
+      }
+    }, 1000);
+
+    render();
+  </script>
+</body>
+</html>

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Item Warehouse Optimization Reports · Inventory Optimization prototype</title>
+  <link rel="stylesheet" href="css/clarity-tokens.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <main class="page">
+    <h1 class="page-title">Item Warehouse Optimization Reports</h1>
+    <nav class="page-tabs">
+      <a href="scheduler.html">Optimization Scheduler</a>
+      <a href="reports.html" class="selected">Item Warehouse Optimization Reports</a>
+    </nav>
+
+    <section class="card">
+      <div class="views-row">
+        <button class="views-btn" data-stub><img src="assets/menu.svg" alt="">Views</button>
+        <span class="views-title">All</span>
+      </div>
+      <div class="toolbar">
+        <span class="spacer"></span>
+        <label class="search"><img src="assets/search.svg" alt=""><input id="q" placeholder="Search"></label>
+        <button class="icon-btn sm" data-stub aria-label="Filter"><img src="assets/filter.svg" alt=""></button>
+        <button class="icon-btn kebab" data-stub aria-label="More"></button>
+      </div>
+      <div id="table"></div>
+    </section>
+  </main>
+
+  <script src="js/app.js"></script>
+  <script>
+    initPage({ primary: 'Inventory', sub: 'Optimization Scheduler' });
+    aiFab();
+    document.querySelector('.kebab').innerHTML = ICON.kebab;
+    const q = document.getElementById('q');
+
+    function render() {
+      const { reports, jobs } = Store.get();
+      const term = q.value.trim().toLowerCase();
+      const rows = reports
+        .map(r => ({ ...r, job: jobs.find(j => j.id === r.jobId) }))
+        .filter(r => r.job)
+        .filter(r => !term || [r.id, r.job.name, r.job.description, r.job.owner, ...r.job.warehouses].join(' ').toLowerCase().includes(term));
+      document.getElementById('table').innerHTML = rows.length ? `
+        <div class="table-wrap"><table class="dt">
+          <thead><tr><th>Report #</th><th>Executed On</th><th>Name</th><th>Description</th><th>Warehouse</th><th>Job Owner</th></tr></thead>
+          <tbody>${rows.map(r => `<tr class="${r.fresh ? 'row-new' : ''}">
+            <td><a href="report.html?id=${r.id}">${r.id}</a></td>
+            <td>${r.executedOn}</td>
+            <td>${esc(r.job.name)}</td>
+            <td style="width:34%">${esc(r.job.description)}</td>
+            <td>${warehouseCell(r.job.warehouses)}</td>
+            <td>${esc(r.job.owner)}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+        ${pagerHtml()}`
+        : `<div class="empty"><img src="assets/empty-file.svg" alt=""><div>No reports yet — run an optimization to generate one</div>
+           <a class="btn btn-outline lg" href="scheduler.html">Go to Optimization Scheduler</a></div>`;
+    }
+    q.addEventListener('input', render);
+    render();
+    // New reports are highlighted once, then treated as seen.
+    Store.update(s => s.reports.forEach(r => delete r.fresh));
+  </script>
+</body>
+</html>

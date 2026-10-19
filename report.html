@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Item Warehouse Optimization Report · Inventory Optimization prototype</title>
+  <link rel="stylesheet" href="css/clarity-tokens.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <main class="page">
+    <h1 class="page-title">Item Warehouse Optimization Report</h1>
+
+    <section class="card accordion" id="details">
+      <div class="accordion-head" role="button" tabindex="0" aria-expanded="true">
+        <h2>Report Details</h2>
+        <img src="assets/chevron-up.svg" alt="">
+      </div>
+      <div class="accordion-body"><div class="details-grid" id="details-grid"></div></div>
+    </section>
+
+    <section class="card">
+      <div class="views-row">
+        <button class="views-btn" data-stub><img src="assets/menu.svg" alt="">Views</button>
+        <span class="views-title">All</span>
+      </div>
+      <div class="toolbar">
+        <span class="spacer"></span>
+        <label class="search"><img src="assets/search.svg" alt=""><input id="q" placeholder="Search"></label>
+        <button class="icon-btn sm" data-stub aria-label="Filter"><img src="assets/filter.svg" alt=""></button>
+        <button class="icon-btn kebab" data-stub aria-label="More"></button>
+      </div>
+      <div id="table"></div>
+    </section>
+  </main>
+
+  <footer class="footer-bar">
+    <a class="btn btn-primary" href="reports.html">Close</a>
+  </footer>
+
+  <script src="js/app.js"></script>
+  <script>
+    initPage({ primary: 'Inventory', sub: 'Optimization Scheduler' });
+    document.querySelector('.kebab').innerHTML = ICON.kebab;
+
+    const s = Store.get();
+    const reportId = Number(new URLSearchParams(location.search).get('id')) || (s.reports[0] && s.reports[0].id);
+    const report = s.reports.find(r => r.id === reportId) || s.reports[0];
+    const job = report && s.jobs.find(j => j.id === report.jobId);
+    if (!job) location.replace('reports.html');
+
+    document.title = `Report #${report.id} · ${job.name}`;
+    const detail = (k, v) => `<div><div class="k">${k}</div><div class="v">${v}</div></div>`;
+    document.getElementById('details-grid').innerHTML =
+      detail('Job Name', esc(job.name)) + detail('Description', esc(job.description)) + detail('Last Executed', report.executedOn) +
+      detail('Job Owner', esc(job.owner)) + detail('Warehouse', warehouseCell(job.warehouses));
+
+    const acc = document.getElementById('details');
+    const head = acc.querySelector('.accordion-head');
+    const toggle = () => { acc.classList.toggle('collapsed'); head.setAttribute('aria-expanded', String(!acc.classList.contains('collapsed'))); };
+    head.addEventListener('click', toggle);
+    head.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+
+    // Optimization output per item. `reco` is the AI recommendation shown in the popover.
+    const items = [
+      { name: 'Thermal Imager', no: '1U140', commodity: 'Facilities', type: 'Reorder', segment: 'AX', uom: 'Each', min: 400, max: 5000, uom2: 'Box',
+        reco: { text: 'Based on lead time and historical demand to avoid stock out, change replenishment type to <b>Min / Max.</b>', min: 525, max: 6500, unit: 'Each' } },
+      { name: 'Safety Gloves (L)', no: '2G118', commodity: 'MRO', type: 'Min / Max', segment: 'BY', uom: 'Pair', min: 1200, max: 4800, uom2: 'Case',
+        reco: { text: 'Demand has dropped 18% over the last two quarters. Lower the reorder point to reduce <b>excess on-hand.</b>', min: 950, max: 3900, unit: 'Pair' } },
+      { name: 'Label Printer Ribbon', no: '4R022', commodity: 'Office Supplies', type: 'Reorder', segment: 'CZ', uom: 'Each', min: 60, max: 300, uom2: 'Box' },
+      { name: 'Hydraulic Fluid 5L', no: '7H310', commodity: 'Maintenance', type: 'Min / Max', segment: 'AY', uom: 'Each', min: 80, max: 260, uom2: 'Each' },
+    ];
+
+    const q = document.getElementById('q');
+    function render() {
+      const term = q.value.trim().toLowerCase();
+      const rows = items.filter(i => !term || [i.name, i.no, i.commodity, i.type].join(' ').toLowerCase().includes(term));
+      document.getElementById('table').innerHTML = `
+        <div class="table-wrap"><table class="dt">
+          <thead><tr>
+            <th>Item Name</th><th>Item #</th><th>Commodity</th><th>Warehouse</th><th>Replenishment Type</th>
+            <th><span class="ai-head"><img src="assets/ai-sparkle.svg" alt="">Segment</span></th><th>UOM</th>
+            <th class="num">Minimum Qty</th><th class="num">Reorder / Maximum Qty</th><th>UOM</th><th>Requester</th><th class="sticky">Actions</th>
+          </tr></thead>
+          <tbody>${rows.map(i => `<tr>
+            <td><a href="#" data-stub>${esc(i.name)}</a></td>
+            <td>${i.no}</td>
+            <td>${esc(i.commodity)}</td>
+            <td>${warehouseCell(job.warehouses)}</td>
+            <td><span class="reco-trigger">${esc(i.type)}${i.reco ? `<button data-popover-trigger data-reco="${items.indexOf(i)}" aria-label="View recommendation"><img src="assets/ai-sparkle.svg" alt=""></button>` : ''}</span></td>
+            <td><span class="seg-chip">${i.segment}</span></td>
+            <td>${i.uom}</td>
+            <td class="num">${i.min}</td>
+            <td class="num">${i.max}</td>
+            <td>${i.uom2}</td>
+            <td>${esc(job.owner)}</td>
+            <td class="sticky"><div class="actions"><button class="icon-btn ghost" data-send="${esc(i.name)}" title="Send for replenishment"><img src="assets/icon-send.svg" alt="Send"></button></div></td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+        ${pagerHtml()}`;
+    }
+
+    document.addEventListener('click', e => {
+      const trig = e.target.closest('[data-reco]');
+      if (trig) {
+        showRecoPopover(trig, items[trig.dataset.reco].reco);
+        return;
+      }
+      const send = e.target.closest('[data-send]');
+      if (send) toast(`“${send.dataset.send}” sent to ${job.owner} for replenishment review`);
+    });
+    q.addEventListener('input', render);
+    render();
+  </script>
+</body>
+</html>

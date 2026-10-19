@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Optimization Scheduler Job · Inventory Optimization prototype</title>
+  <link rel="stylesheet" href="css/clarity-tokens.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <main class="page narrow">
+    <h1 class="page-title">Optimization Scheduler Job</h1>
+
+    <section class="card form-card">
+      <div class="form-section-title" id="details-title">Details</div>
+      <div class="form-grid">
+        <div class="field">
+          <label class="field-label" for="name">Job Name <span class="req">*</span></label>
+          <input class="input" id="name" autocomplete="off">
+        </div>
+        <div class="field">
+          <span class="field-label">Active</span>
+          <div class="radio-group">
+            <label class="radio"><input type="radio" name="active" value="yes" checked> Yes</label>
+            <label class="radio"><input type="radio" name="active" value="no"> No</label>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label" for="desc">Description <span class="req">*</span></label>
+          <input class="input" id="desc" autocomplete="off">
+        </div>
+        <div class="field" id="wh-field">
+          <span class="field-label">Warehouse</span>
+          <div class="select" id="wh-select" tabindex="0"></div>
+          <div class="helper-error" id="wh-error" hidden></div>
+        </div>
+        <div class="field" id="owner-field">
+          <span class="field-label">Job Owner <span class="info-slot" title="The owner receives the optimization report"></span></span>
+          <div class="select" id="owner-select" tabindex="0"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card form-card" id="repeat-card">
+      <div class="switch-row">Repeat <button class="switch" id="repeat" role="switch" aria-checked="false" aria-label="Repeat"></button></div>
+      <div class="repeat-body" id="repeat-body" hidden>
+        <div>
+          <div class="sub-label" style="font-weight:400">Every</div>
+          <div class="inline"><input class="input num" id="every" type="number" min="1" value="1"> month(s)</div>
+        </div>
+        <div>
+          <div class="sub-label" style="font-size:12px">Start on</div>
+          <div class="date" id="start-wrap"><input type="date" id="start"></div>
+        </div>
+        <div style="padding-left:8px">
+          <div class="sub-label" style="font-weight:400">End On</div>
+          <div class="end-on">
+            <label class="radio"><input type="radio" name="end" value="never" checked> Never</label>
+            <div class="opt">
+              <label class="radio"><input type="radio" name="end" value="after"> After</label>
+              <div class="inline" data-end="after"><input class="input num" id="occurrences" type="number" min="1" value="1"> occurrences</div>
+            </div>
+            <div class="opt date-opt">
+              <label class="radio"><input type="radio" name="end" value="date" aria-label="On date"></label>
+              <div class="date" id="end-wrap" data-end="date"><input type="date" id="end-date"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer-bar">
+    <a class="btn btn-text" href="scheduler.html">Cancel</a>
+    <button class="btn btn-outline" id="run">Run Optimization</button>
+    <button class="btn btn-primary" id="submit">Create</button>
+  </footer>
+
+  <script src="js/app.js"></script>
+  <script>
+    initPage({ primary: 'Inventory', sub: 'Optimization Scheduler' });
+
+    // Fill icon placeholders in the static markup.
+    document.querySelectorAll('.select').forEach(s => { s.innerHTML = ICON.building + '<div class="value"></div>' + ICON.caret; });
+    document.querySelectorAll('.date').forEach(d => {
+      const input = d.querySelector('input');
+      d.innerHTML = '<span></span>' + ICON.calendar;
+      d.appendChild(input);
+    });
+
+    document.querySelector('.info-slot').innerHTML = ICON.info;
+
+    const editId = new URLSearchParams(location.search).get('id');
+    const editing = editId ? Store.job(editId) : null;
+    const todayIso = new Date().toISOString().slice(0, 10);
+
+    const state = editing ? {
+      name: editing.name, description: editing.description, active: editing.active,
+      warehouses: editing.warehouses.filter(w => w !== 'All'), owner: editing.owner,
+      repeats: editing.repeats, every: editing.every, startOn: editing.startOn,
+      endType: editing.endType, occurrences: editing.occurrences, endDate: editing.endDate,
+    } : {
+      name: '', description: '', active: true, warehouses: [], owner: CURRENT_USER,
+      repeats: false, every: 1, startOn: todayIso, endType: 'never', occurrences: 1, endDate: todayIso,
+    };
+
+    const $ = id => document.getElementById(id);
+    const nameEl = $('name'), descEl = $('desc');
+
+    if (editing) {
+      $('details-title').remove();
+      $('submit').textContent = 'Save';
+      document.title = `Edit ${editing.name} · Inventory Optimization prototype`;
+    }
+
+    nameEl.value = state.name;
+    descEl.value = state.description;
+    document.querySelector(`input[name=active][value=${state.active ? 'yes' : 'no'}]`).checked = true;
+    $('every').value = state.every;
+    $('occurrences').value = state.occurrences;
+    $('start').value = state.startOn;
+    $('end-date').value = state.endDate;
+    document.querySelector(`input[name=end][value=${state.endType}]`).checked = true;
+
+    /* ---------- Warehouse conflicts: a warehouse may belong to only one scheduled job. */
+    function conflicts() {
+      const used = new Set();
+      Store.get().jobs.forEach(j => { if (!editing || j.id !== editing.id) j.warehouses.forEach(w => used.add(w)); });
+      return state.warehouses.filter(w => used.has(w));
+    }
+
+    /* ---------- Warehouse multi-select (search + checkboxes + Cancel/Confirm) */
+    const whSelect = $('wh-select');
+    function renderWarehouses() {
+      const bad = conflicts();
+      const value = whSelect.querySelector('.value');
+      value.innerHTML = state.warehouses.map(w => `
+        <span class="tag ${bad.includes(w) ? 'invalid' : ''}">${esc(w)}<button data-remove="${esc(w)}" aria-label="Remove ${esc(w)}">${ICON.close}</button></span>`).join('')
+        + (state.warehouses.length < 3 ? '<span class="placeholder">Select warehouse</span>' : '');
+      const err = $('wh-error');
+      err.hidden = !bad.length;
+      err.innerHTML = bad.length ? `${ICON.error} Warehouse(s) already used in another scheduled job.` : '';
+      validate();
+    }
+    whSelect.addEventListener('click', e => {
+      const rm = e.target.closest('[data-remove]');
+      if (rm) {
+        e.stopPropagation();
+        state.warehouses = state.warehouses.filter(w => w !== rm.dataset.remove);
+        renderWarehouses();
+        return;
+      }
+      toggleDropdown('wh');
+    });
+
+    function warehouseDropdown() {
+      let pending = [...state.warehouses];
+      const dd = document.createElement('div');
+      dd.className = 'dropdown';
+      dd.innerHTML = `
+        <label class="dd-search"><img src="assets/magnifying-glass.svg" alt=""><input placeholder="Search"></label>
+        <ul></ul>
+        <div class="dd-foot"><button data-act="cancel">Cancel</button><button data-act="confirm">Confirm</button></div>`;
+      const list = dd.querySelector('ul');
+      const search = dd.querySelector('input');
+      const draw = () => {
+        const term = search.value.toLowerCase();
+        const items = WAREHOUSES.filter(w => w.toLowerCase().includes(term));
+        list.innerHTML = items.length ? items.map(w => `
+          <li data-wh-opt="${esc(w)}" class="${pending.includes(w) ? 'selected' : ''}">
+            <span class="cb ${pending.includes(w) ? 'on' : ''}">${ICON.check}</span>${esc(w)}
+          </li>`).join('') : '<div class="dd-empty">No warehouses found</div>';
+      };
+      list.addEventListener('click', e => {
+        const li = e.target.closest('[data-wh-opt]');
+        if (!li) return;
+        const w = li.dataset.whOpt;
+        pending = pending.includes(w) ? pending.filter(x => x !== w) : [...pending, w];
+        draw();
+      });
+      search.addEventListener('input', draw);
+      dd.querySelector('[data-act=cancel]').addEventListener('click', () => closeDropdown());
+      dd.querySelector('[data-act=confirm]').addEventListener('click', () => {
+        // Keep the order in which the user picked them.
+        state.warehouses = [...state.warehouses.filter(w => pending.includes(w)), ...pending.filter(w => !state.warehouses.includes(w))];
+        closeDropdown();
+        renderWarehouses();
+      });
+      draw();
+      return dd;
+    }
+
+    /* ---------- Job owner single-select */
+    const ownerSelect = $('owner-select');
+    function renderOwner() {
+      ownerSelect.querySelector('.value').innerHTML = state.owner ? esc(state.owner) : '<span class="placeholder">Select user</span>';
+    }
+    ownerSelect.addEventListener('click', () => toggleDropdown('owner'));
+    function ownerDropdown() {
+      const dd = document.createElement('div');
+      dd.className = 'dropdown';
+      dd.innerHTML = `<label class="dd-search"><img src="assets/magnifying-glass.svg" alt=""><input placeholder="Search"></label><ul></ul>`;
+      const list = dd.querySelector('ul');
+      const search = dd.querySelector('input');
+      const draw = () => {
+        const term = search.value.toLowerCase();
+        const items = USERS.filter(u => u.toLowerCase().includes(term));
+        list.innerHTML = items.length
+          ? items.map(u => `<li class="single ${u === state.owner ? 'selected' : ''}" data-user="${esc(u)}">${esc(u)}</li>`).join('')
+          : '<div class="dd-empty">No users found</div>';
+      };
+      list.addEventListener('click', e => {
+        const li = e.target.closest('[data-user]');
+        if (!li) return;
+        state.owner = li.dataset.user;
+        closeDropdown();
+        renderOwner();
+      });
+      search.addEventListener('input', draw);
+      draw();
+      return dd;
+    }
+
+    /* ---------- Dropdown plumbing */
+    let open = null;
+    function closeDropdown() {
+      if (!open) return;
+      open.dd.remove();
+      open.select.classList.remove('open');
+      open = null;
+    }
+    function toggleDropdown(kind) {
+      const wasOpen = open && open.kind;
+      closeDropdown();
+      if (wasOpen === kind) return;
+      const select = kind === 'wh' ? whSelect : ownerSelect;
+      const dd = kind === 'wh' ? warehouseDropdown() : ownerDropdown();
+      select.parentElement.appendChild(dd);
+      select.classList.add('open');
+      open = { kind, dd, select };
+      dd.querySelector('input').focus();
+    }
+    document.addEventListener('mousedown', e => {
+      if (open && !open.dd.contains(e.target) && !open.select.contains(e.target)) closeDropdown();
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDropdown(); });
+
+    /* ---------- Repeat */
+    const repeatBtn = $('repeat');
+    function renderRepeat() {
+      repeatBtn.setAttribute('aria-checked', String(state.repeats));
+      $('repeat-body').hidden = !state.repeats;
+      // A repeating job runs on its schedule, so the one-off "Run Optimization" action is hidden.
+      $('run').hidden = state.repeats;
+      renderDates();
+    }
+    repeatBtn.addEventListener('click', () => { state.repeats = !state.repeats; renderRepeat(); });
+
+    function renderDates() {
+      $('start-wrap').querySelector('span').textContent = isoToUs($('start').value || todayIso);
+      $('end-wrap').querySelector('span').textContent = isoToUs($('end-date').value || todayIso);
+      const endType = document.querySelector('input[name=end]:checked').value;
+      document.querySelector('[data-end=after]').style.opacity = endType === 'after' ? 1 : .6;
+      $('occurrences').disabled = endType !== 'after';
+      $('end-wrap').classList.toggle('disabled', endType !== 'date');
+      $('end-date').disabled = endType !== 'date';
+    }
+    ['start', 'end-date'].forEach(id => $(id).addEventListener('change', renderDates));
+    document.querySelectorAll('input[name=end]').forEach(r => r.addEventListener('change', renderDates));
+    document.querySelectorAll('.date input[type=date]').forEach(inp => inp.addEventListener('click', () => inp.showPicker && inp.showPicker()));
+
+    /* ---------- Validation + submit */
+    function validate() {
+      const ready = nameEl.value.trim() && descEl.value.trim() && state.warehouses.length;
+      $('submit').disabled = !ready;
+      $('run').disabled = !ready;
+    }
+    nameEl.addEventListener('input', validate);
+    descEl.addEventListener('input', validate);
+
+    function save() {
+      if (conflicts().length) {
+        toast('Remove warehouses already used in another scheduled job');
+        whSelect.focus();
+        return null;
+      }
+      const data = {
+        name: nameEl.value.trim(),
+        description: descEl.value.trim(),
+        active: document.querySelector('input[name=active]:checked').value === 'yes',
+        warehouses: state.warehouses,
+        owner: state.owner || CURRENT_USER,
+        repeats: state.repeats,
+        every: Math.max(1, Number($('every').value) || 1),
+        startOn: $('start').value || todayIso,
+        endType: document.querySelector('input[name=end]:checked').value,
+        occurrences: Math.max(1, Number($('occurrences').value) || 1),
+        endDate: $('end-date').value || todayIso,
+      };
+      let id;
+      Store.update(s => {
+        if (editing) {
+          Object.assign(s.jobs.find(j => j.id === editing.id), data);
+          id = editing.id;
+        } else {
+          id = s.nextJobId++;
+          s.jobs.unshift({ id, ...data, status: 'Scheduled', lastExecuted: '' });
+        }
+      });
+      return id;
+    }
+
+    $('submit').addEventListener('click', () => {
+      const id = save();
+      if (id) go(`scheduler.html?highlight=${id}`, editing ? 'Changes saved' : `“${nameEl.value.trim()}” scheduled`);
+    });
+    $('run').addEventListener('click', () => {
+      const id = save();
+      if (!id) return;
+      startRun(id);
+      go(`scheduler.html?highlight=${id}`, 'Optimization started — this may take a few moments');
+    });
+
+    renderWarehouses();
+    renderOwner();
+    renderRepeat();
+    validate();
+  </script>
+</body>
+</html>

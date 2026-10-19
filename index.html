@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Setup · Inventory Optimization prototype</title>
+  <link rel="stylesheet" href="css/clarity-tokens.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <main class="setup">
+    <h1>Setup</h1>
+    <div class="filter">Find it fast! Use the Instant Filter <input id="instant-filter" aria-label="Instant filter"></div>
+    <div class="cols" id="setup-cols"></div>
+  </main>
+
+  <script src="js/app.js"></script>
+  <script>
+    const columns = [
+      [['Company Setup', ['Company Information', 'Adoption Dashboard', 'Company Addresses', 'Users', 'Groups', 'Projects',
+        'Departments', 'Categories', 'Commodities', 'Commodity Translations', 'Coupa Taxonomy', 'UNSPSC Commodity Mappings',
+        'Roles', 'Permissions', 'Content Groups', 'Approvals', 'Manage Delegates', 'Units of Measure', 'Inventory Warehouses',
+        'Inspection Codes', 'Security Controls', 'Custom Fields', 'Custom Field Translations', 'Lookups', 'Lookup Values',
+        'Dashboard Controls', 'Enterprises', 'Translations', 'Object Translations', 'Translation Suggestions',
+        'Machine Translations', 'Company Calendar', 'Legal Entities']]],
+      [['Procurement', ['Buying Policies', 'PO Customization', 'Featured iRequest Sites', 'Manage Requisitions',
+        'Manage Purchase Orders', 'Manage RFQs', 'Order Lists', 'Order List Lines', 'Price Comparisons',
+        'Purchasing Classification Engine', 'Requisition Line Form Responses']],
+       ['Platform', ['App Marketplace', "'Ask an Expert' Categories", 'Custom Footer', 'Custom Objects', 'Export to Accounting',
+        'Installed Apps and Content', 'Installed Marketplace Apps', 'IFrames and Panels', 'Menu Configuration', 'Notifications',
+        'Process Step History', 'Presentations', 'Process Translations', 'Process Automator', 'Process Instances',
+        'Project Templates', 'Questionnaires', 'Reported Employee Reviews']]],
+      [['Suppliers', ['Business Entities', 'Supplier Instructions', 'Supplier Certificate Reminders', 'Supplier Link Requests',
+        'Suppliers', 'Remit-To', 'Contracts', 'Supplier Portal Directory', 'Supplier Portal Catalogs', 'Supplier Reviews',
+        'Supplier Review Form Response', 'Items', 'Item Access Groups', 'Item Labels', 'Punchout Sites']],
+       ['Inventory', ['Inventory Settings', 'Internal Suppliers', 'Fulfillment', 'Adjust Inventory', 'Warehouses',
+        'Default Receiving Locations', 'Cycle Count Types', 'Replenishment', 'Inventory Periods', 'Shipment Tracking',
+        'Optimization Settings', 'Optimization Scheduler'], true]],
+    ];
+    const targets = { 'Optimization Settings': 'settings.html', 'Optimization Scheduler': 'scheduler.html' };
+    document.getElementById('setup-cols').innerHTML = columns.map(col => `<div>${col.map(([title, items, hl]) => `
+      <section class="box ${hl ? 'hl' : ''}">
+        <h3>${esc(title)}</h3>
+        <ul>${items.map(i => {
+          const isTarget = hl && (i === 'Optimization Settings' || i === 'Optimization Scheduler');
+          return `<li class="${isTarget ? 'target' : ''}"><a href="${targets[i] || '#'}" ${targets[i] ? '' : 'data-stub'}>${esc(i)}</a></li>`;
+        }).join('')}</ul>
+      </section>`).join('')}</div>`).join('');
+
+    document.getElementById('instant-filter').addEventListener('input', e => {
+      const q = e.target.value.toLowerCase();
+      document.querySelectorAll('.setup li').forEach(li => { li.style.display = li.textContent.toLowerCase().includes(q) ? '' : 'none'; });
+    });
+
+    initPage({ primary: 'Setup' });
+  </script>
+</body>
+</html>
