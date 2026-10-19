@@ -1,0 +1,109 @@
+assets/ai-sparkle.svg
+  s_90b79f523a5a29::t_fbd70d17455c3e 1-23
+assets/banner-close.svg
+  s_90b79f523a5a29::t_3377f7bf2e5284 1-5
+assets/bell.svg
+  s_90b79f523a5a29::t_48a0673333195d 1-6
+assets/caret-classic.svg
+  s_90b79f523a5a29::t_a951d4cac96db2 1-7
+assets/cart.svg
+  s_90b79f523a5a29::t_304324bf0e0e54 1-10
+assets/check-circle.svg
+  s_90b79f523a5a29::t_a493645c632572 1-10
+assets/checkbox-fill.svg
+  s_90b79f523a5a29::t_0e74a245d460de 1-5
+assets/chevron-up.svg
+  s_90b79f523a5a29::t_22e5663370283f 1-5
+assets/close-small.svg
+  s_90b79f523a5a29::t_d0804375ebef33 1-5
+assets/coupa-logo-blue.svg
+  s_90b79f523a5a29::t_239af6edd2ad59 1-10
+assets/coupa-logo-icon.svg
+  s_90b79f523a5a29::t_3fa69b1cf993b2 1-16
+assets/coupa-logotype.svg
+  s_90b79f523a5a29::t_76a1f196e9e17f 1-11
+assets/empty-file.svg
+  s_90b79f523a5a29::t_cdd56744df4a7b 1-5
+assets/filter.svg
+  s_90b79f523a5a29::t_55e40e7f53d5b4 1-5
+assets/help.svg
+  s_90b79f523a5a29::t_10dcad3c6c669f 1-3
+assets/home.svg
+  s_90b79f523a5a29::t_686b043fe59f20 1-5
+assets/ic-write-request.svg
+  s_90b79f523a5a29::t_b8674969741c99 1-8
+assets/icon-clipboard.svg
+  s_90b79f523a5a29::t_3e945b98f8a3da 1-5
+assets/icon-edit.svg
+  s_90b79f523a5a29::t_b91c1644a1d8b2 1-5
+assets/icon-refresh.svg
+  s_90b79f523a5a29::t_5cc697c2efe9e9 1-5
+assets/icon-send.svg
+  s_90b79f523a5a29::t_4ffd83dd239ea8 1-5
+assets/magnifying-glass.svg
+  s_90b79f523a5a29::t_055197258b959e 1-3
+assets/menu.svg
+  s_90b79f523a5a29::t_fe5a33516d8ddf 1-5
+assets/ohb-cart-edit.svg
+  s_90b79f523a5a29::t_dabf498b52b5f6 1-6
+assets/ohb-cart-go.svg
+  s_90b79f523a5a29::t_46da6ce31fa137 1-11
+assets/ohb-clipboard.svg
+  s_90b79f523a5a29::t_c4d22893cf6afd 1-10
+assets/ohb-consume.svg
+  s_90b79f523a5a29::t_c4a25ecd8c26ff 1-15
+assets/ohb-restore.svg
+  s_90b79f523a5a29::t_e4d7fc988889ad 1-7
+assets/ohb-settings.svg
+  s_90b79f523a5a29::t_237c8252eecda8 1-5
+assets/search.svg
+  s_90b79f523a5a29::t_6a3c1790e7a24a 1-5
+assets/sparkle.svg
+  s_90b79f523a5a29::t_a5fcee9303463d 1-21
+assets/write-request-btn.svg
+  s_90b79f523a5a29::t_c531e07e23856b 1-3
+css/clarity-tokens.css
+  s_90b79f523a5a29::t_d9212ac9f6af60 1-116
+css/styles.css
+  s_90b79f523a5a29::t_36c95c0d31238d 1-402
+index.html
+  s_90b79f523a5a29::t_76901fd7142741 1-57
+job.html
+  s_90b79f523a5a29::t_ecee74a7ed867c 1-329
+js/app.js
+  s_90b79f523a5a29::t_1f45c0248ce13f 1-327
+prefs.html
+  s_90b79f523a5a29::t_ef5ed769e715dd 1-176
+report.html
+  s_90b79f523a5a29::t_2a83b1a831ad20 1-115
+scheduler.html
+  s_90b79f523a5a29::t_ec6f1b4cbbdc0a 1-116
+settings.html
+  s_90b79f523a5a29::t_c1790efa0702ec 1-228
+.gitignore
+  s_90b79f523a5a29::t_d3b25656724b9a 1
+README.md
+  s_90b79f523a5a29::t_c69ad1432ae563 1-52
+iwo.html
+  s_90b79f523a5a29::t_7d3dfd307e55a2 1-102
+ohb.html
+  s_90b79f523a5a29::t_aa238412e31ecb 1-124
+reports.html
+  s_90b79f523a5a29::t_ae6ea7c1a3a70f 1-68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4a70a407c9cc5ef270d9a6c5a203de47b89f244a",
+  "prompts": {},
+  "sessions": {
+    "s_90b79f523a5a29": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "876c34df-c086-449a-9cc0-3b951a10a3fc",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "liemnguyen-afk <301846626+liemnguyen-afk@users.noreply.github.com>"
+    }
+  }
+}
