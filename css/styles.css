@@ -363,7 +363,7 @@ table.dt .ai-head img { width: 20px; height: 20px; }
 .ai-head svg.info { width: 16px; height: 16px; color: var(--cui-color-text-t2); }
 
 /* ================================================================ Optimization Settings */
-.os-page { padding: 40px 24px 60px; }
+.os-page { max-width: 1360px; margin: 0 auto; padding: 40px 24px 60px; box-sizing: content-box; }
 .os-page .page-title { font-size: 32px; margin-bottom: 36px; }
 .os-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 30px; align-items: start; }
 .os-col { display: flex; flex-direction: column; gap: 30px; }
